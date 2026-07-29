@@ -1,0 +1,6 @@
+#!/bin/bash
+# omarchy-notification-center-launch
+# Launches the notification center with proper LD_PRELOAD for gtk4-layer-shell
+
+exec env LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so \
+    python3 ~/.local/bin/omarchy-notification-center "$@"

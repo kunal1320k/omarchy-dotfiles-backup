@@ -1,0 +1,5 @@
+antigravity-ide
+cloudflare-warp-bin
+cloudflared-bin
+mkinitcpio-numlock
+wlogout

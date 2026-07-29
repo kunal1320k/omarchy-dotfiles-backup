@@ -1,0 +1,636 @@
+#!/usr/bin/env python3
+"""
+omarchy-notification-center
+A GTK4 + layer-shell notification center for Omarchy/Mako.
+
+- Reads notification history from makoctl history
+- Reads theme colors from ~/.config/omarchy/current/theme/waybar.css
+- Displays as a floating layer-shell panel (top-right)
+- Toggle: running again while open closes the existing window
+"""
+
+import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gtk4LayerShell", "1.0")
+
+from gi.repository import Gtk, GLib, Pango, Gdk
+from gi.repository import Gtk4LayerShell as LayerShell
+
+import subprocess
+import os
+import re
+import sys
+import signal
+
+# ── Toggle: kill existing instance ─────────────────────────────────────────
+LOCK_FILE = "/tmp/omarchy-notification-center.pid"
+
+
+def kill_existing():
+    """Kill any running notification center. Returns True if one was killed."""
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE) as f:
+                pid = int(f.read().strip())
+            if pid != os.getpid():
+                os.kill(pid, signal.SIGTERM)
+                os.remove(LOCK_FILE)
+                return True
+        except (ProcessLookupError, ValueError, OSError):
+            try:
+                os.remove(LOCK_FILE)
+            except OSError:
+                pass
+    return False
+
+
+def write_lock():
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+
+def cleanup_lock():
+    try:
+        os.remove(LOCK_FILE)
+    except OSError:
+        pass
+
+
+# ── Theme color extraction ──────────────────────────────────────────────────
+THEME_CSS = os.path.expanduser("~/.config/omarchy/current/theme/waybar.css")
+COLORS_TOML = os.path.expanduser("~/.config/omarchy/current/theme/colors.toml")
+
+
+def parse_theme_colors():
+    """Extract color values from colors.toml and waybar.css."""
+    colors = {
+        "foreground": "#e0e0e0",
+        "background": "#1a1a2e",
+        "accent": "#7aa2f7",
+    }
+
+    # Try colors.toml first (more complete)
+    if os.path.exists(COLORS_TOML):
+        try:
+            with open(COLORS_TOML) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, val = line.partition("=")
+                    key = key.strip()
+                    val = val.strip().strip('"').strip("'")
+                    if key in colors and val.startswith("#"):
+                        colors[key] = val
+        except OSError:
+            pass
+
+    # Fallback: waybar.css
+    if os.path.exists(THEME_CSS):
+        pattern = re.compile(r'@define-color\s+(\w+)\s+(#[0-9a-fA-F]{3,8});')
+        try:
+            with open(THEME_CSS) as f:
+                for line in f:
+                    m = pattern.search(line)
+                    if m and m.group(1) in colors and colors[m.group(1)].startswith("#1a"):
+                        colors[m.group(1)] = m.group(2)
+        except OSError:
+            pass
+
+    return colors
+
+
+def is_dark(hex_color):
+    try:
+        h = hex_color.lstrip("#")
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5
+    except Exception:
+        return True
+
+
+# ── Notification history ────────────────────────────────────────────────────
+
+def parse_history_text(text):
+    """Parse makoctl history text output into list of dicts."""
+    notifications = []
+    current = None
+
+    for line in text.strip().split("\n"):
+        if not line:
+            continue
+
+        # "Notification N: Summary text"
+        m = re.match(r"^Notification\s+(\d+):\s*(.*)", line)
+        if m:
+            if current is not None:
+                notifications.append(current)
+            current = {
+                "id": int(m.group(1)),
+                "summary": m.group(2).strip(),
+                "app-name": "",
+                "body": "",
+                "urgency": "normal",
+            }
+            continue
+
+        if current is None:
+            continue
+
+        stripped = line.strip()
+        if stripped.startswith("App name:"):
+            current["app-name"] = stripped[len("App name:"):].strip()
+        elif stripped.startswith("Body:"):
+            current["body"] = stripped[len("Body:"):].strip()
+        elif stripped.startswith("Urgency:"):
+            current["urgency"] = stripped[len("Urgency:"):].strip()
+
+    if current is not None:
+        notifications.append(current)
+
+    return list(reversed(notifications))  # newest first
+
+
+def get_history():
+    """Return list of notification dicts from makoctl history."""
+    try:
+        result = subprocess.run(
+            ["makoctl", "history"],
+            capture_output=True, text=True, timeout=3
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+        return parse_history_text(result.stdout)
+    except Exception:
+        return []
+
+
+def clear_all_notifications():
+    """Dismiss all active popups and clear all notifications from mako history."""
+    try:
+        subprocess.run(["makoctl", "dismiss", "-a", "-h"], capture_output=True, timeout=2)
+        for _ in range(150):
+            res = subprocess.run(["makoctl", "history"], capture_output=True, text=True, timeout=2)
+            if not res.stdout or "Notification" not in res.stdout:
+                break
+            subprocess.run(["makoctl", "restore"], capture_output=True, timeout=1)
+            subprocess.run(["makoctl", "dismiss", "-a", "-h"], capture_output=True, timeout=1)
+    except Exception:
+        pass
+
+
+def dismiss_single_notification(notif_id):
+    """Remove a specific notification from mako history."""
+    if notif_id is None:
+        return
+    try:
+        # Check if in history
+        hist = subprocess.run(["makoctl", "history"], capture_output=True, text=True, timeout=2)
+        if f"Notification {notif_id}:" in hist.stdout:
+            # Restore all items to active
+            for _ in range(150):
+                h_check = subprocess.run(["makoctl", "history"], capture_output=True, text=True, timeout=2)
+                if not h_check.stdout or "Notification" not in h_check.stdout:
+                    break
+                subprocess.run(["makoctl", "restore"], capture_output=True, timeout=1)
+
+            # Dismiss the targeted ID without history
+            subprocess.run(["makoctl", "dismiss", "-n", str(notif_id), "-h"], capture_output=True, timeout=1)
+
+            # Put remaining active notifications back into history
+            subprocess.run(["makoctl", "dismiss", "-a"], capture_output=True, timeout=1)
+        else:
+            # If active, dismiss without adding to history
+            subprocess.run(["makoctl", "dismiss", "-n", str(notif_id), "-h"], capture_output=True, timeout=1)
+    except Exception:
+        pass
+
+
+
+# ── Build themed CSS ────────────────────────────────────────────────────────
+def _hex_to_rgb(h):
+    h = h.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _rgb_to_hex(r, g, b):
+    return f"#{int(r):02x}{int(g):02x}{int(b):02x}"
+
+
+def _lighten(hex_color, amount):
+    try:
+        r, g, b = _hex_to_rgb(hex_color)
+        return _rgb_to_hex(min(255, r + 255 * amount),
+                           min(255, g + 255 * amount),
+                           min(255, b + 255 * amount))
+    except Exception:
+        return hex_color
+
+
+def _darken(hex_color, amount):
+    try:
+        r, g, b = _hex_to_rgb(hex_color)
+        return _rgb_to_hex(max(0, r - 255 * amount),
+                           max(0, g - 255 * amount),
+                           max(0, b - 255 * amount))
+    except Exception:
+        return hex_color
+
+
+def _blend(hex_a, hex_b, t):
+    try:
+        r1, g1, b1 = _hex_to_rgb(hex_a)
+        r2, g2, b2 = _hex_to_rgb(hex_b)
+        return _rgb_to_hex(r1 * (1 - t) + r2 * t,
+                           g1 * (1 - t) + g2 * t,
+                           b1 * (1 - t) + b2 * t)
+    except Exception:
+        return hex_a
+
+
+def build_css(colors):
+    fg = colors.get("foreground", "#e0e0e0")
+    bg = colors.get("background", "#1a1a2e")
+    accent = colors.get("accent", "#7aa2f7")
+    dark = is_dark(bg)
+
+    if dark:
+        surface = _lighten(bg, 0.07)
+        surface2 = _lighten(bg, 0.13)
+        divider = _lighten(bg, 0.16)
+        muted_fg = _blend(fg, bg, 0.45)
+    else:
+        surface = _darken(bg, 0.06)
+        surface2 = _darken(bg, 0.11)
+        divider = _darken(bg, 0.14)
+        muted_fg = _blend(fg, bg, 0.45)
+
+    return f"""
+window {{
+    background-color: {bg};
+    border: 1.5px solid {accent};
+    border-radius: 10px;
+}}
+
+.nc-header {{
+    background-color: {surface};
+    border-bottom: 1px solid {divider};
+    border-radius: 10px 10px 0 0;
+    padding: 10px 14px 8px 14px;
+}}
+
+.nc-title {{
+    color: {fg};
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: bold;
+}}
+
+.nc-count {{
+    color: {muted_fg};
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+    font-size: 11px;
+    margin-right: 6px;
+}}
+
+.nc-clear-btn {{
+    background-color: transparent;
+    color: {accent};
+    border: 1px solid {accent};
+    border-radius: 5px;
+    padding: 3px 10px;
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+    font-size: 11px;
+}}
+
+.nc-clear-btn:hover {{
+    background-color: {accent};
+    color: {bg};
+}}
+
+.nc-empty-box {{
+    background-color: {bg};
+    padding: 40px 20px;
+}}
+
+.nc-empty {{
+    color: {muted_fg};
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+    font-size: 13px;
+}}
+
+.nc-scroll {{
+    background-color: {bg};
+}}
+
+.nc-list {{
+    background-color: {bg};
+}}
+
+.nc-notification {{
+    background-color: {surface};
+    border-radius: 7px;
+    margin: 4px 8px;
+    padding: 9px 10px;
+    border-left: 3px solid {accent};
+}}
+
+.nc-notification:hover {{
+    background-color: {surface2};
+}}
+
+.nc-app-name {{
+    color: {accent};
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: bold;
+}}
+
+.nc-summary {{
+    color: {fg};
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: bold;
+}}
+
+.nc-body {{
+    color: {muted_fg};
+    font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace;
+    font-size: 11px;
+}}
+
+.nc-dismiss-btn {{
+    background-color: transparent;
+    color: {muted_fg};
+    border: none;
+    border-radius: 4px;
+    padding: 0 4px;
+    font-size: 13px;
+    min-width: 0;
+    min-height: 0;
+}}
+
+.nc-dismiss-btn:hover {{
+    color: {fg};
+    background-color: {divider};
+}}
+
+.nc-urgency-critical {{
+    border-left-color: #f38ba8;
+}}
+
+.nc-urgency-low {{
+    border-left-color: {muted_fg};
+}}
+"""
+
+
+# ── Notification row widget ─────────────────────────────────────────────────
+def make_notification_row(notif, on_dismiss):
+    app_name = str(notif.get("app-name", "Unknown"))
+    summary = str(notif.get("summary", ""))
+    body = str(notif.get("body", ""))
+    urgency = str(notif.get("urgency", "normal"))
+    notif_id = notif.get("id")
+
+    # Strip markup tags
+    body_plain = re.sub(r"<[^>]+>", "", body).strip()
+
+    outer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    outer.add_css_class("nc-notification")
+    if urgency == "critical":
+        outer.add_css_class("nc-urgency-critical")
+    elif urgency == "low":
+        outer.add_css_class("nc-urgency-low")
+
+    content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+    content.set_hexpand(True)
+
+    if app_name:
+        app_label = Gtk.Label(label=f"  {app_name.upper()}", xalign=0)
+        app_label.add_css_class("nc-app-name")
+        app_label.set_ellipsize(Pango.EllipsizeMode.END)
+        content.append(app_label)
+
+    if summary:
+        sum_label = Gtk.Label(label=summary, xalign=0)
+        sum_label.add_css_class("nc-summary")
+        sum_label.set_ellipsize(Pango.EllipsizeMode.END)
+        content.append(sum_label)
+
+    if body_plain:
+        body_label = Gtk.Label(label=body_plain, xalign=0)
+        body_label.add_css_class("nc-body")
+        body_label.set_ellipsize(Pango.EllipsizeMode.END)
+        body_label.set_max_width_chars(44)
+        body_label.set_wrap(True)
+        body_label.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        body_label.set_lines(2)
+        content.append(body_label)
+
+    outer.append(content)
+
+    dismiss_btn = Gtk.Button(label="✕")
+    dismiss_btn.add_css_class("nc-dismiss-btn")
+    dismiss_btn.set_valign(Gtk.Align.START)
+    dismiss_btn.connect("clicked", lambda _: on_dismiss(notif_id, outer))
+    outer.append(dismiss_btn)
+
+    return outer
+
+
+
+# ── Main Window ─────────────────────────────────────────────────────────────
+class NotificationCenter(Gtk.ApplicationWindow):
+    def __init__(self, app, colors):
+        super().__init__(application=app, title="Notification Center")
+        self._colors = colors
+
+        # Layer shell setup
+        LayerShell.init_for_window(self)
+        LayerShell.set_layer(self, LayerShell.Layer.OVERLAY)
+        LayerShell.set_anchor(self, LayerShell.Edge.TOP, True)
+        LayerShell.set_anchor(self, LayerShell.Edge.RIGHT, True)
+        LayerShell.set_margin(self, LayerShell.Edge.TOP, 30)
+        LayerShell.set_margin(self, LayerShell.Edge.RIGHT, 10)
+        LayerShell.set_keyboard_mode(self, LayerShell.KeyboardMode.ON_DEMAND)
+        self.set_default_size(360, -1)
+
+        # Apply CSS
+        provider = Gtk.CssProvider()
+        provider.load_from_string(build_css(colors))
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
+
+        self._build_ui()
+        self._load_notifications()
+
+        # Close on Escape
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.connect("key-pressed", self._on_key)
+        self.add_controller(key_ctrl)
+
+        # Close when focus lost
+        self.connect("notify::is-active", self._on_focus_changed)
+        self._just_opened = True
+        GLib.timeout_add(500, self._clear_just_opened)
+
+    def _clear_just_opened(self):
+        self._just_opened = False
+        return False
+
+    def _build_ui(self):
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.set_child(root)
+
+        # Header
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header.add_css_class("nc-header")
+
+        title = Gtk.Label(label="󰂚  Notifications")
+        title.add_css_class("nc-title")
+        title.set_hexpand(True)
+        title.set_xalign(0)
+        header.append(title)
+
+        self._count_label = Gtk.Label(label="")
+        self._count_label.add_css_class("nc-count")
+        header.append(self._count_label)
+
+        clear_btn = Gtk.Button(label="Clear All")
+        clear_btn.add_css_class("nc-clear-btn")
+        clear_btn.connect("clicked", self._on_clear_all)
+        header.append(clear_btn)
+
+        root.append(header)
+
+        # Scrollable list
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_max_content_height(540)
+        scroll.set_propagate_natural_height(True)
+        scroll.add_css_class("nc-scroll")
+        root.append(scroll)
+
+        self._list_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self._list_box.add_css_class("nc-list")
+        self._list_box.set_margin_top(6)
+        self._list_box.set_margin_bottom(8)
+        scroll.set_child(self._list_box)
+
+        # Empty state
+        self._empty_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._empty_box.add_css_class("nc-empty-box")
+        self._empty_label = Gtk.Label(label="󰂜  No notifications")
+        self._empty_label.add_css_class("nc-empty")
+        self._empty_label.set_halign(Gtk.Align.CENTER)
+        self._empty_box.append(self._empty_label)
+        self._list_box.append(self._empty_box)
+
+    def _load_notifications(self):
+        # Remove all rows except empty state
+        child = self._list_box.get_first_child()
+        to_remove = []
+        while child:
+            next_child = child.get_next_sibling()
+            if child != self._empty_box:
+                to_remove.append(child)
+            child = next_child
+        for row in to_remove:
+            self._list_box.remove(row)
+
+        notifications = get_history()
+        count = len(notifications)
+
+        if count == 0:
+            self._empty_box.set_visible(True)
+            self._count_label.set_label("")
+        else:
+            self._empty_box.set_visible(False)
+            self._count_label.set_label(f"{count}")
+            for notif in notifications:
+                row = make_notification_row(notif, self._on_dismiss_row)
+                self._list_box.append(row)
+
+    def _on_dismiss_row(self, notif_id, row_widget):
+        dismiss_single_notification(notif_id)
+        self._list_box.remove(row_widget)
+        self._update_count()
+
+
+    def _update_count(self):
+        count = 0
+        child = self._list_box.get_first_child()
+        while child:
+            if child != self._empty_box:
+                count += 1
+            child = child.get_next_sibling()
+        if count == 0:
+            self._empty_box.set_visible(True)
+            self._count_label.set_label("")
+        else:
+            self._count_label.set_label(f"{count}")
+
+    def _on_clear_all(self, _btn):
+        clear_all_notifications()
+        child = self._list_box.get_first_child()
+        to_remove = []
+        while child:
+            next_child = child.get_next_sibling()
+            if child != self._empty_box:
+                to_remove.append(child)
+            child = next_child
+        for row in to_remove:
+            self._list_box.remove(row)
+        self._empty_box.set_visible(True)
+        self._count_label.set_label("")
+
+    def _on_key(self, ctrl, keyval, keycode, state):
+        if keyval == Gdk.KEY_Escape:
+            self.close()
+            return True
+        return False
+
+    def _on_focus_changed(self, win, param):
+        if self._just_opened:
+            return
+        if not self.get_property("is-active"):
+            GLib.timeout_add(200, self._check_close)
+
+    def _check_close(self):
+        if not self.get_property("is-active"):
+            self.close()
+        return False
+
+
+# ── Application ─────────────────────────────────────────────────────────────
+class NotificationCenterApp(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="org.omarchy.NotificationCenter")
+
+    def do_activate(self):
+        colors = parse_theme_colors()
+        win = NotificationCenter(self, colors)
+        write_lock()
+        win.connect("destroy", lambda _: cleanup_lock())
+        win.present()
+
+
+def main():
+    if kill_existing():
+        sys.exit(0)
+
+    app = NotificationCenterApp()
+    signal.signal(signal.SIGTERM, lambda s, f: (cleanup_lock(), sys.exit(0)))
+    sys.exit(app.run(None))
+
+
+if __name__ == "__main__":
+    main()

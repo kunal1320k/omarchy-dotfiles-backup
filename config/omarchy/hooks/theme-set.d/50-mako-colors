@@ -1,0 +1,41 @@
+#!/bin/bash
+# Updates ~/.config/mako/config with theme colors after a theme change.
+# Reads from the current theme's colors.toml
+
+COLORS_FILE="$HOME/.config/omarchy/current/theme/colors.toml"
+
+if [[ ! -f "$COLORS_FILE" ]]; then
+    exit 0
+fi
+
+# Extract colors
+ACCENT=$(grep -E '^accent\s*=' "$COLORS_FILE" | head -1 | grep -oP '#[0-9a-fA-F]+')
+FG=$(grep -E '^foreground\s*=' "$COLORS_FILE" | head -1 | grep -oP '#[0-9a-fA-F]+')
+BG=$(grep -E '^background\s*=' "$COLORS_FILE" | head -1 | grep -oP '#[0-9a-fA-F]+')
+
+# Fallbacks
+ACCENT="${ACCENT:-#888888}"
+FG="${FG:-#ffffff}"
+BG="${BG:-#000000}"
+
+# Write mako config with updated colors
+cat > "$HOME/.config/mako/config" << EOF
+include=~/.local/share/omarchy/default/mako/core.ini
+
+# History
+history=1
+max-history=100
+
+# Theme colors (auto-updated by theme-set hook)
+text-color=${FG}
+border-color=${ACCENT}
+background-color=${BG}
+
+# Appearance
+border-radius=6
+EOF
+
+# Reload mako if running
+if pgrep -x mako > /dev/null; then
+    makoctl reload 2>/dev/null || true
+fi

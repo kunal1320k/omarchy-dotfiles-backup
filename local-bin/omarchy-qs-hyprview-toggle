@@ -1,0 +1,6 @@
+#!/bin/bash
+quickshell ipc -c qs-hyprview call expose toggle masonry 2>/dev/null || {
+    uwsm-app -- quickshell -c qs-hyprview &
+    sleep 0.3
+    quickshell ipc -c qs-hyprview call expose toggle masonry
+}

@@ -1,0 +1,21 @@
+#!/bin/bash
+export WINEPREFIX="$HOME/.wine-chemdraw"
+export WINEARCH=win64
+
+# Locate ChemDraw executable dynamically in the prefix
+EXE=$(find "$WINEPREFIX/drive_c" -iname "ChemDraw.exe" 2>/dev/null | head -n 1)
+INSTALLER=$(find "$WINEPREFIX/drive_c" -iname "Install.exe" 2>/dev/null | head -n 1)
+
+if [ -n "$EXE" ]; then
+    echo "Starting ChemDraw..."
+    exec wine "$EXE" "$@"
+elif [ -n "$INSTALLER" ]; then
+    echo "Starting ChemDraw Installer ($INSTALLER)..."
+    exec wine "$INSTALLER" "$@"
+elif [ -f "$HOME/Documents/ChemDraw_26.0.0.exe" ]; then
+    echo "Extracting ChemDraw Installer..."
+    exec wine "$HOME/Documents/ChemDraw_26.0.0.exe" "$@"
+else
+    echo "ChemDraw executable or installer not found." >&2
+    exit 1
+fi
