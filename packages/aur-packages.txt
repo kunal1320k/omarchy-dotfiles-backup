@@ -1,5 +1,12 @@
 antigravity-ide
+caelestia-cli
+caelestia-firefox-theme
+caelestia-shell
 cloudflare-warp-bin
 cloudflared-bin
+darkly-bin
 mkinitcpio-numlock
+papirus-folders
+qtengine
+todoist-appimage
 wlogout

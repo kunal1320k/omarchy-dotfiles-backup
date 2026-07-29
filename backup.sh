@@ -51,9 +51,12 @@ if [ -d ~/.config/omarchy ]; then
 fi
 echo "  - Omarchy configs, hooks & themes backed up."
 
-# Mako & Walker
+# SwayNC, Mako, Walker, GTK
+if [ -d ~/.config/swaync ]; then rsync -a --delete ~/.config/swaync/ "$BACKUP_DIR/config/swaync/"; fi
 if [ -d ~/.config/mako ]; then rsync -a --delete ~/.config/mako/ "$BACKUP_DIR/config/mako/"; fi
 if [ -d ~/.config/walker ]; then rsync -a --delete ~/.config/walker/ "$BACKUP_DIR/config/walker/"; fi
+if [ -d ~/.config/gtk-3.0 ]; then mkdir -p "$BACKUP_DIR/config/gtk-3.0"; rsync -a --delete ~/.config/gtk-3.0/ "$BACKUP_DIR/config/gtk-3.0/"; fi
+if [ -d ~/.config/gtk-4.0 ]; then mkdir -p "$BACKUP_DIR/config/gtk-4.0"; rsync -a --delete ~/.config/gtk-4.0/ "$BACKUP_DIR/config/gtk-4.0/"; fi
 
 # Terminals
 for term in alacritty foot kitty ghostty; do

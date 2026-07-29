@@ -1,0 +1,5 @@
+cd ~/omarchy-dotfiles-backup
+./backup.sh
+git add .
+git commit -m "Update dotfiles backup $(date '+%Y-%m-%d')"
+git push

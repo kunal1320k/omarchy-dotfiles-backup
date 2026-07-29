@@ -1,4 +1,5 @@
 7zip
+adw-gtk-theme
 alacritty
 alsa-utils
 amd-ucode
@@ -12,11 +13,16 @@ bash-completion
 bat
 bc
 bluetui
+bluez
+bluez-utils
 bolt
 brightnessctl
 btop
 btrfs-progs
 cabextract
+caelestia-cli
+caelestia-firefox-theme
+caelestia-shell
 cava
 clang
 cliphist
@@ -28,7 +34,10 @@ cups
 cups-browsed
 cups-filters
 cups-pdf
+curl
+darkly-bin
 ddcutil
+direnv
 discord
 docker
 docker-buildx
@@ -48,8 +57,9 @@ fcitx5-qt
 fd
 ffmpegthumbnailer
 firefox
-fish
 fontconfig
+foot
+frameworkintegration
 fuzzel
 fzf
 geoclue
@@ -82,7 +92,6 @@ imv
 inetutils
 inxi
 iwd
-jq
 kernel-modules-hook
 kitty
 kvantum-qt5
@@ -106,12 +115,14 @@ mako
 man-db
 mariadb-libs
 matugen
+micro
 mise
 mkinitcpio
 mkinitcpio-numlock
 mousepad
 mpv
 nano
+networkmanager
 noto-fonts
 noto-fonts-cjk
 noto-fonts-emoji
@@ -121,9 +132,13 @@ nvidia-utils
 omarchy-keyring
 omarchy-walker
 pamixer
+papirus-folders
+papirus-icon-theme
+pavucontrol
 pavucontrol-qt
 pipewire
 pipewire-alsa
+pipewire-audio
 pipewire-jack
 pipewire-pulse
 playerctl
@@ -137,7 +152,7 @@ python-pip
 python-poetry-core
 python-terminaltexteffects
 qt5-wayland
-quickshell
+qtengine
 ripgrep
 rog-control-center
 ruby
@@ -155,6 +170,7 @@ sudo
 sushi
 swappy
 swaybg
+swaync
 swayosd
 system-config-printer
 tesseract
@@ -163,7 +179,9 @@ thunar
 tldr
 tmux
 tobi-try
+todoist-appimage
 translate-shell
+trash-cli
 tree-sitter-cli
 ttf-ia-writer
 ttf-jetbrains-mono-nerd
@@ -194,6 +212,7 @@ xdg-desktop-portal-gtk
 xdg-desktop-portal-hyprland
 xdg-desktop-portal-kde
 xdg-terminal-exec
+xdg-user-dirs
 xfce4-taskmanager
 xmlstarlet
 yaru-icon-theme

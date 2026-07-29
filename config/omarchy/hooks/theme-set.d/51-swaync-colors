@@ -1,0 +1,6 @@
+#!/bin/bash
+# Updates ~/.config/swaync/style.css theme reference and reloads SwayNC
+
+if pgrep -x swaync > /dev/null; then
+    swaync-client -R -rs 2>/dev/null || true
+fi
