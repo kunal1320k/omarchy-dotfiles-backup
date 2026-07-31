@@ -1,6 +1,5 @@
-
 [Default Applications]
-text/plain=org.xfce.mousepad.desktop
+text/plain=nvim.desktop
 text/english=org.xfce.mousepad.desktop
 text/x-makefile=org.xfce.mousepad.desktop
 text/x-c++hdr=org.xfce.mousepad.desktop
@@ -19,7 +18,6 @@ text/x-c++=org.xfce.mousepad.desktop
 application/xml=org.xfce.mousepad.desktop
 text/xml=org.xfce.mousepad.desktop
 text/markdown=org.xfce.mousepad.desktop
-
 inode/directory=thunar.desktop
 image/png=imv.desktop
 image/jpeg=imv.desktop
@@ -51,3 +49,7 @@ application/ogg=mpv.desktop
 x-scheme-handler/mailto=HEY.desktop
 x-scheme-handler/antigravity=antigravity.desktop
 x-scheme-handler/claude-cli=claude-code-url-handler.desktop
+application/x-zerosize=nvim.desktop
+
+[Added Associations]
+application/x-zerosize=nvim.desktop;

@@ -1,6 +1,5 @@
 7zip 26.02-1
 adw-gtk-theme 6.5-1
-alacritty 0.17.0-1
 alsa-utils 1.2.16-1
 amd-ucode 20260622-1
 antigravity-ide 2.1.1-1
@@ -58,7 +57,6 @@ fd 10.4.2-2
 ffmpegthumbnailer 2.3.0-1
 firefox 152.0.6-1
 fontconfig 2:2.18.2-1
-foot 1.27.0-1
 frameworkintegration 6.28.0-1
 fuzzel 1.14.1-1
 fzf 0.74.1-1
@@ -119,9 +117,9 @@ micro 2.0.15-3
 mise 2026.7.10-1
 mkinitcpio 41-4
 mkinitcpio-numlock 1.0.3-1
-mousepad 0.7.0-1
 mpv 1:0.41.0-3
 nano 9.1-1
+neovim 0.12.4-1
 networkmanager 1.56.1-2
 noto-fonts 1:2026.07.01-1
 noto-fonts-cjk 20240730-1
@@ -179,7 +177,6 @@ thunar 4.20.9-1
 tldr 3.4.4-1
 tmux 3.7_b-1
 tobi-try 1.8.1-2
-todoist-appimage 9.29.1-1
 translate-shell 0.9.7.1-2
 trash-cli 0.24.5.26-3
 tree-sitter-cli 0.26.9-1
@@ -192,7 +189,6 @@ unzip 6.0-23
 usage 3.5.5-1
 uv 0.11.29-1
 uwsm 0.26.6-1
-voxtype-bin 0.7.5-1
 waybar 0.15.0-2
 wf-recorder 0.6.0-1
 wget 1.25.0-6

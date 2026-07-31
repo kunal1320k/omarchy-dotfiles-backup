@@ -1,6 +1,5 @@
 7zip
 adw-gtk-theme
-alacritty
 alsa-utils
 amd-ucode
 antigravity-ide
@@ -58,7 +57,6 @@ fd
 ffmpegthumbnailer
 firefox
 fontconfig
-foot
 frameworkintegration
 fuzzel
 fzf
@@ -119,9 +117,9 @@ micro
 mise
 mkinitcpio
 mkinitcpio-numlock
-mousepad
 mpv
 nano
+neovim
 networkmanager
 noto-fonts
 noto-fonts-cjk
@@ -179,7 +177,6 @@ thunar
 tldr
 tmux
 tobi-try
-todoist-appimage
 translate-shell
 trash-cli
 tree-sitter-cli
@@ -192,7 +189,6 @@ unzip
 usage
 uv
 uwsm
-voxtype-bin
 waybar
 wf-recorder
 wget

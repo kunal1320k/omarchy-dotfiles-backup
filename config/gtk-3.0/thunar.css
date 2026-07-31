@@ -56,8 +56,13 @@
     background-color: transparent;
 }
 
-.thunar .frame.standard-view .view *:selected {
+.thunar .frame.standard-view .view *:selected,
+.thunar .view:selected,
+.thunar iconview:selected,
+.thunar .iconview *:selected {
+    background-color: alpha(#b7c4ff, 0.25);
     color: #b7c4ff;
+    border-radius: 8px;
 }
 
 .thunar .rubberband {

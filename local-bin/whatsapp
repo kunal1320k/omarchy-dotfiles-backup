@@ -1,0 +1,3 @@
+#!/bin/bash
+# Standalone WhatsApp Web desktop runner with persistent storage & native SwayNC notifications
+firefox -P "WhatsApp" --name "whatsapp-desktop" --class "WhatsApp" --new-instance "https://web.whatsapp.com" "$@" &

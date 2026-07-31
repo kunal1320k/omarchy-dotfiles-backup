@@ -8,3 +8,5 @@ source ~/.local/share/omarchy/default/bash/rc
 # Add your own exports, aliases, and functions here.
 #
 # Make an alias for invoking commands you use constantly
+export EDITOR="nvim"
+export VISUAL="nvim"

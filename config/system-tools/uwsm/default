@@ -4,7 +4,7 @@
 export TERMINAL=xdg-terminal-exec
 
 # Use mousepad as default text editor
-export EDITOR=mousepad
+export EDITOR=nvim
 export VISUAL=mousepad
 
 # Use a custom directory for screenshots (remember to make the directory!)

@@ -8,5 +8,4 @@ darkly-bin
 mkinitcpio-numlock
 papirus-folders
 qtengine
-todoist-appimage
 wlogout
